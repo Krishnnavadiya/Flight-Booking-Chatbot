@@ -1,0 +1,28 @@
+{
+  "name": "flight-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@azure/ai-language-conversations": "^1.0.0-beta.1",
+    "botbuilder": "^4.17.0-blobs1",
+    "botbuilder-ai": "^4.17.0-blobs1",
+    "botbuilder-dialogs": "^4.17.0-blobs1",
+    "botframework-connector": "^4.17.0-blobs1",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.1",
+    "restify": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

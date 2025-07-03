@@ -1,0 +1,11 @@
+{
+  "ignore": ["node_modules/*"],
+  "delay": "500",
+  "watch": [
+    "*.js",
+    "dialogs/*.js",
+    "models/*.js",
+    "services/*.js"
+  ],
+  "ext": "js,json,env"
+}
