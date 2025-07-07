@@ -25,13 +25,18 @@ class FlightService {
 
     async searchFlights(origin, destination, departureDate, returnDate, travelers = 1, class_ = 'ECONOMY') {
         try {
-            // Convert city names to IATA codes (in a real app, you'd use the Amadeus Airport & City Search API)
-            // For simplicity, we'll assume the user inputs IATA codes directly
+            // Convert city names to IATA codes
             const originCode = origin.length === 3 ? origin : await this.getCityCode(origin);
             const destinationCode = destination.length === 3 ? destination : await this.getCityCode(destination);
             
-            if (!originCode || !destinationCode) {
-                throw new Error('Could not determine airport codes for the specified cities');
+            // Provide specific error messages for missing city codes
+            // In the searchFlights method, replace the existing error messages with:
+            if (!originCode && !destinationCode) {
+                throw new Error(`Could not find airport codes for both "${origin}" and "${destination}". Please check the spelling of the city names and try again.`);
+            } else if (!originCode) {
+                throw new Error(`Could not find airport code for "${origin}". Please check the spelling and try again. Did you mean a similar city name?`);
+            } else if (!destinationCode) {
+                throw new Error(`Could not find airport code for "${destination}". Please check the spelling and try again. Did you mean a similar city name?`);
             }
 
             // Format the date as YYYY-MM-DD if it's not already
@@ -67,13 +72,38 @@ class FlightService {
             const response = await this.amadeus.shopping.flightOffersSearch.get(searchParams);
             
             // Transform the Amadeus response to our application's format
-            return this.transformAmadeusResponse(response.data);
-        } catch (error) {
-            console.error('Error searching flights:', error);
+            const flights = this.transformAmadeusResponse(response.data);
             
-            // If API call fails, fall back to mock data for demo purposes
-            console.log('Falling back to mock data');
-            return this.getMockFlightData(origin, destination, departureDate, class_);
+            // If no flights found, throw a specific error
+            if (!flights || flights.length === 0) {
+                throw new Error(`No flights found from ${originCode} to ${destinationCode} on ${formattedDepartureDate}. Please try different dates or destinations.`);
+            }
+            
+            return flights;
+        } catch (error) {
+            // Check for Amadeus API specific errors
+            if (error.response && error.response.result && error.response.result.errors) {
+                const apiErrors = error.response.result.errors;
+                for (const apiError of apiErrors) {
+                    if (apiError.title === 'INVALID DATE' && apiError.detail === 'Date/Time is in the past') {
+                        throw new Error(`The date you provided (${departureDate}) is in the past. Please select a future date for your travel.`);
+                    }
+                }
+            }
+            
+            // Handle other error types
+            const errorMsg = error.message || '';
+            if (errorMsg.includes('Could not find airport code')) {
+                // Pass through our custom error messages about city codes
+                throw error;
+            } else if (errorMsg.includes('No flights found')) {
+                // Pass through our custom error message about no flights
+                throw error;
+            } else {
+                // For other errors (API failures, etc.), provide a more helpful message
+                console.error('Error searching flights:', error);
+                throw new Error('Unable to search for flights at this time. Please try again later or try different search parameters.');
+            }
         }
     }
 
@@ -151,15 +181,37 @@ class FlightService {
     formatDate(dateStr) {
         // If it's already in YYYY-MM-DD format, return as is
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            return dateStr;
+            const inputDate = new Date(dateStr);
+            // Check if date is valid and not in the past
+            if (!isNaN(inputDate.getTime())) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Reset time to start of day
+                
+                if (inputDate >= today) {
+                    return dateStr;
+                }
+                // If date is in the past, we'll handle it below
+            }
         }
         
         // Try to parse the date string
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) {
-            // If parsing fails, return today's date as fallback
-            const today = new Date();
-            return today.toISOString().split('T')[0];
+            // If parsing fails, use tomorrow's date as fallback
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split('T')[0];
+        }
+        
+        // Check if the date is in the past
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        
+        if (date < today) {
+            // If date is in the past, use tomorrow as fallback
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split('T')[0];
         }
         
         // Format as YYYY-MM-DD
@@ -167,26 +219,78 @@ class FlightService {
     }
 
     // Helper method to get IATA code for a city
-    // In a real app, you would use the Amadeus Airport & City Search API
     async getCityCode(cityName) {
-        // This is a simplified mapping for demo purposes
+        // This is an expanded mapping for demo purposes
         const cityMap = {
-            'new york': 'NYC',
-            'london': 'LON',
-            'paris': 'PAR',
-            'tokyo': 'TYO',
-            'delhi': 'DEL',
-            'mumbai': 'BOM',
-            'bangalore': 'BLR',
-            'chennai': 'MAA',
-            'hyderabad': 'HYD',
-            'kolkata': 'CCU',
-            'dubai': 'DXB',
-            'singapore': 'SIN',
-            'sydney': 'SYD'
+            // Major international cities
+            'new york': 'NYC', 'london': 'LON', 'paris': 'PAR', 'tokyo': 'TYO',
+            'beijing': 'BJS', 'shanghai': 'SHA', 'hong kong': 'HKG', 'seoul': 'SEL',
+            'sydney': 'SYD', 'melbourne': 'MEL', 'dubai': 'DXB', 'abu dhabi': 'AUH',
+            'singapore': 'SIN', 'bangkok': 'BKK', 'kuala lumpur': 'KUL',
+            'toronto': 'YTO', 'vancouver': 'YVR', 'montreal': 'YMQ',
+            'mexico city': 'MEX', 'sao paulo': 'SAO', 'rio de janeiro': 'RIO',
+            'buenos aires': 'BUE', 'johannesburg': 'JNB', 'cairo': 'CAI',
+            'moscow': 'MOW', 'istanbul': 'IST', 'rome': 'ROM', 'madrid': 'MAD',
+            'barcelona': 'BCN', 'berlin': 'BER', 'frankfurt': 'FRA', 'munich': 'MUC',
+            'amsterdam': 'AMS', 'brussels': 'BRU', 'zurich': 'ZRH', 'vienna': 'VIE',
+            
+            // Indian cities
+            'delhi': 'DEL', 'new delhi': 'DEL', 'mumbai': 'BOM', 'bangalore': 'BLR',
+            'bengaluru': 'BLR', 'chennai': 'MAA', 'hyderabad': 'HYD', 'kolkata': 'CCU',
+            'ahmedabad': 'AMD', 'pune': 'PNQ', 'jaipur': 'JAI', 'lucknow': 'LKO',
+            'kochi': 'COK', 'goa': 'GOI', 'thiruvananthapuram': 'TRV', 'kozhikode': 'CCJ',
+            'guwahati': 'GAU', 'bhubaneswar': 'BBI', 'patna': 'PAT', 'chandigarh': 'IXC',
+            'nagpur': 'NAG', 'coimbatore': 'CJB', 'indore': 'IDR', 'srinagar': 'SXR',
+            'varanasi': 'VNS', 'udaipur': 'UDR', 'amritsar': 'ATQ', 'jodhpur': 'JDH',
+            
+            // US cities
+            'los angeles': 'LAX', 'chicago': 'CHI', 'houston': 'HOU', 'phoenix': 'PHX',
+            'philadelphia': 'PHL', 'san antonio': 'SAT', 'san diego': 'SAN', 'dallas': 'DFW',
+            'san jose': 'SJC', 'austin': 'AUS', 'jacksonville': 'JAX', 'san francisco': 'SFO',
+            'columbus': 'CMH', 'indianapolis': 'IND', 'fort worth': 'DFW', 'charlotte': 'CLT',
+            'seattle': 'SEA', 'denver': 'DEN', 'washington': 'WAS', 'boston': 'BOS',
+            'detroit': 'DTT', 'nashville': 'BNA', 'portland': 'PDX', 'las vegas': 'LAS',
+            'atlanta': 'ATL', 'miami': 'MIA', 'minneapolis': 'MSP', 'tampa': 'TPA',
+            
+            // Countries (map to capital or major city)
+            'usa': 'NYC', 'united states': 'NYC', 'uk': 'LON', 'united kingdom': 'LON',
+            'france': 'PAR', 'japan': 'TYO', 'china': 'BJS', 'australia': 'SYD',
+            'india': 'DEL', 'canada': 'YTO', 'germany': 'FRA', 'italy': 'ROM',
+            'spain': 'MAD', 'russia': 'MOW', 'brazil': 'SAO', 'mexico': 'MEX',
+            'south africa': 'JNB', 'egypt': 'CAI', 'turkey': 'IST', 'netherlands': 'AMS',
+            'switzerland': 'ZRH', 'austria': 'VIE', 'belgium': 'BRU', 'sweden': 'STO',
+            'norway': 'OSL', 'denmark': 'CPH', 'finland': 'HEL', 'greece': 'ATH',
+            'portugal': 'LIS', 'ireland': 'DUB', 'new zealand': 'AKL', 'malaysia': 'KUL',
+            'thailand': 'BKK', 'vietnam': 'HAN', 'indonesia': 'JKT', 'philippines': 'MNL',
+            'south korea': 'SEL', 'saudi arabia': 'RUH', 'uae': 'DXB', 'qatar': 'DOH'
         };
         
-        return cityMap[cityName.toLowerCase()] || null;
+        // Check for exact match first
+        const exactMatch = cityMap[cityName.toLowerCase()];
+        if (exactMatch) return exactMatch;
+        
+        // Common misspellings dictionary
+        const misspellings = {
+            'hederabad': 'hyderabad',
+            'delli': 'delhi',
+            'mumbay': 'mumbai',
+            'banglore': 'bangalore',
+            'chenai': 'chennai',
+            'new delli': 'new delhi',
+            'kolkatta': 'kolkata',
+            'new yourk': 'new york',
+            'singapur': 'singapore'
+            // Add more common misspellings as needed
+        };
+        
+        // Check if it's a known misspelling
+        const correctedCity = misspellings[cityName.toLowerCase()];
+        if (correctedCity) {
+            // Return the code for the corrected city name
+            return cityMap[correctedCity];
+        }
+        
+        return null;
     }
 
     // Fallback mock data method

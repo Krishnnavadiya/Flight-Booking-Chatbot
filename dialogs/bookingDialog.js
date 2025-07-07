@@ -28,7 +28,15 @@ class BookingDialog extends CancelAndHelpDialog {
         this.initialDialogId = WATERFALL_DIALOG;
     }
 
+    // In the selectFlightStep method, add this at the beginning:
+    
     async selectFlightStep(stepContext) {
+        // Check if a flight was already selected (from comparison dialog)
+        if (stepContext.options && stepContext.options.selectedFlight) {
+            stepContext.values.selectedFlight = stepContext.options.selectedFlight;
+            return await stepContext.next();
+        }
+        
         // In a real implementation, this would use the selected flight from previous dialog
         // For now, we'll simulate having a selected flight
         stepContext.values.selectedFlight = {

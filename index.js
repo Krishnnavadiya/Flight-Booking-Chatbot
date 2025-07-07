@@ -29,8 +29,19 @@ const adapter = new BotFrameworkAdapter({
 
 // Catch-all for errors
 adapter.onTurnError = async (context, error) => {
+    // Log the error
     console.error(`\n [onTurnError] unhandled error: ${error}`);
-    await context.sendActivity('The bot encountered an error. Please try again later.');
+    
+    // Send a more helpful message to the user
+    const errorMsg = error.message || '';
+    if (errorMsg.includes('Could not find airport code')) {
+        await context.sendActivity('The bot encountered an error with the city name you provided. Please try again with a different city name.');
+    } else if (errorMsg.includes('No flights found')) {
+        await context.sendActivity('No flights were found for your search criteria. Please try different dates or destinations.');
+    } else {
+        // Generic error message
+        await context.sendActivity('The bot encountered an error. Please try again later.');
+    }
 };
 
 // Create storage, state and LUIS recognizer
