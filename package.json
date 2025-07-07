@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@azure/ai-language-conversations": "^1.0.0-beta.1",
+    "amadeus": "^11.0.0",
     "botbuilder": "^4.17.0-blobs1",
     "botbuilder-ai": "^4.17.0-blobs1",
     "botbuilder-dialogs": "^4.17.0-blobs1",
