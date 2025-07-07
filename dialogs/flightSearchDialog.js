@@ -1,4 +1,4 @@
-const { WaterfallDialog, TextPrompt } = require('botbuilder-dialogs');
+const { WaterfallDialog, TextPrompt, DialogSet, DialogTurnStatus } = require('botbuilder-dialogs');
 const { CancelAndHelpDialog } = require('./cancelAndHelpDialog');
 const { FlightService } = require('../services/flightService');
 

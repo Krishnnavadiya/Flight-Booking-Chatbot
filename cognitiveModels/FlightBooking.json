@@ -1,191 +1,167 @@
 {
-  "luis_schema_version": "7.0.0",
+  "metadata": {
+    "projectName": "FlightBooking",
+    "description": "Flight booking and search conversational model",
+    "language": "en-us",
+    "domain": "custom"
+  },
   "intents": [
     {
-      "name": "BookFlight",
-      "features": []
+      "category": "BookFlight",
+      "description": "Book a flight between two locations"
     },
     {
-      "name": "Cancel",
-      "features": []
+      "category": "Cancel",
+      "description": "Cancel the current operation"
     },
     {
-      "name": "SearchFlights",
-      "features": []
+      "category": "SearchFlights",
+      "description": "Search for available flights"
     },
     {
-      "name": "CompareFlights",
-      "features": []
+      "category": "CompareFlights",
+      "description": "Compare different flight options"
     },
     {
-      "name": "BookTicket",
-      "features": []
+      "category": "BookTicket",
+      "description": "Book a ticket for a selected flight"
     },
     {
-      "name": "None",
-      "features": []
+      "category": "None",
+      "description": "None of the defined intents"
     }
   ],
   "entities": [
     {
-      "name": "From",
-      "children": [
-        "Airport"
-      ],
-      "roles": []
+      "category": "From",
+      "description": "Origin airport or city"
     },
     {
-      "name": "To",
-      "children": [
-        "Airport"
-      ],
-      "roles": []
+      "category": "To",
+      "description": "Destination airport or city"
     },
     {
-      "name": "Class",
-      "children": [],
-      "roles": []
+      "category": "Class",
+      "description": "Flight class (economy, business, first)"
+    },
+    {
+      "category": "datetimeV2",
+      "description": "Date and time information",
+      "prebuiltEntityType": "datetimeV2"
+    },
+    {
+      "category": "number",
+      "description": "Numeric values",
+      "prebuiltEntityType": "number"
     }
   ],
-  "hierarchicals": [],
-  "composites": [],
-  "closedLists": [],
-  "prebuiltEntities": [
-    {
-      "name": "datetimeV2",
-      "roles": []
-    },
-    {
-      "name": "number",
-      "roles": []
-    },
-    {
-      "name": "ordinal",
-      "roles": []
-    },
-    {
-      "name": "geographyV2",
-      "roles": []
-    }
-  ],
-  "utterances": [
-    {
-      "text": "book a flight from new delhi to mumbai",
-      "intent": "BookFlight",
-      "entities": [
-        {
-          "entity": "From",
-          "startPos": 19,
-          "endPos": 27,
-          "children": [
-            {
-              "entity": "Airport",
-              "startPos": 19,
-              "endPos": 27
-            }
-          ]
-        },
-        {
-          "entity": "To",
-          "startPos": 32,
-          "endPos": 37,
-          "children": [
-            {
-              "entity": "Airport",
-              "startPos": 32,
-              "endPos": 37
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "text": "i want to fly from london to paris",
-      "intent": "BookFlight",
-      "entities": [
-        {
-          "entity": "From",
-          "startPos": 17,
-          "endPos": 22,
-          "children": [
-            {
-              "entity": "Airport",
-              "startPos": 17,
-              "endPos": 22
-            }
-          ]
-        },
-        {
-          "entity": "To",
-          "startPos": 27,
-          "endPos": 31,
-          "children": [
-            {
-              "entity": "Airport",
-              "startPos": 27,
-              "endPos": 31
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "text": "search for flights",
-      "intent": "SearchFlights",
-      "entities": []
-    },
-    {
-      "text": "find me a flight",
-      "intent": "SearchFlights",
-      "entities": []
-    },
-    {
-      "text": "compare flight prices",
-      "intent": "CompareFlights",
-      "entities": []
-    },
-    {
-      "text": "show me the cheapest flights",
-      "intent": "CompareFlights",
-      "entities": []
-    },
-    {
-      "text": "book this ticket",
-      "intent": "BookTicket",
-      "entities": []
-    },
-    {
-      "text": "i want to purchase this flight",
-      "intent": "BookTicket",
-      "entities": []
-    },
-    {
-      "text": "cancel",
-      "intent": "Cancel",
-      "entities": []
-    },
-    {
-      "text": "cancel booking",
-      "intent": "Cancel",
-      "entities": []
-    },
-    {
-      "text": "stop",
-      "intent": "Cancel",
-      "entities": []
-    },
-    {
-      "text": "hello",
-      "intent": "None",
-      "entities": []
-    },
-    {
-      "text": "hi",
-      "intent": "None",
-      "entities": []
-    }
-  ],
-  "patterns": [],
-  "patternAnyEntities": [],
-  "settings": []
+  "assets": {
+    "utterances": [
+      {
+        "text": "book a flight from new delhi to mumbai",
+        "intent": "BookFlight",
+        "stringIndexType": "TextElement_V8",
+        "entities": [
+          { "category": "From", "offset": 19, "length": 9 },
+          { "category": "To", "offset": 32, "length": 6 }
+        ]
+      },
+      {
+        "text": "i want to fly from london to paris",
+        "intent": "BookFlight",
+        "stringIndexType": "TextElement_V8",
+        "entities": [
+          { "category": "From", "offset": 17, "length": 6 },
+          { "category": "To", "offset": 27, "length": 5 }
+        ]
+      },
+      {
+        "text": "search for flights",
+        "intent": "SearchFlights",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "find me a flight to dubai",
+        "intent": "SearchFlights",
+        "stringIndexType": "TextElement_V8",
+        "entities": [
+          { "category": "To", "offset": 21, "length": 4 }
+        ]
+      },
+      {
+        "text": "compare flight prices",
+        "intent": "CompareFlights",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "show me the cheapest flights",
+        "intent": "CompareFlights",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "book this ticket",
+        "intent": "BookTicket",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "i want to purchase this flight",
+        "intent": "BookTicket",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "cancel",
+        "intent": "Cancel",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "cancel booking",
+        "intent": "Cancel",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "stop",
+        "intent": "Cancel",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "hello",
+        "intent": "None",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "hi",
+        "intent": "None",
+        "stringIndexType": "TextElement_V8",
+        "entities": []
+      },
+      {
+        "text": "i want to fly from bangalore to singapore on july 10",
+        "intent": "BookFlight",
+        "stringIndexType": "TextElement_V8",
+        "entities": [
+          { "category": "From", "offset": 17, "length": 9 },
+          { "category": "To", "offset": 30, "length": 9 },
+          { "category": "datetimeV2", "offset": 43, "length": 7 }
+        ]
+      },
+      {
+        "text": "find me business class flights to tokyo",
+        "intent": "SearchFlights",
+        "stringIndexType": "TextElement_V8",
+        "entities": [
+          { "category": "Class", "offset": 8, "length": 14 },
+          { "category": "To", "offset": 35, "length": 4 }
+        ]
+      }
+    ]
+  }
 }
