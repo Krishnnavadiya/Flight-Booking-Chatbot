@@ -482,6 +482,24 @@ class FlightService {
             throw error;
         }
     }
+
+    // Add this method to your FlightService class
+    async getFlightByNumber(flightNumber) {
+        // In a real implementation, this would query a database or API
+        // For now, we'll return a mock flight
+        return {
+            id: 'FL' + Math.floor(Math.random() * 1000),
+            airline: 'SkyWings Airlines',
+            flightNumber: flightNumber,
+            origin: 'New York (JFK)',
+            destination: 'San Francisco (SFO)',
+            departureTime: '10:00 AM',
+            arrivalTime: '1:30 PM',
+            duration: '3h 30m',
+            price: 299.99,
+            departureDate: '2025-07-15'
+        };
+    }
 }
 
 module.exports.FlightService = FlightService;

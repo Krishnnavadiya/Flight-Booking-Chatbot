@@ -111,7 +111,17 @@ class FlightBot extends ActivityHandler {
                         await this.flightComparisonDialog.run(context, this.dialogState);
                         break;
                     case 'BookTicket':
-                        await this.bookingDialog.run(context, this.dialogState);
+                        // Extract flight information from the activity
+                        let selectedFlight = null;
+                        if (context.activity.value && context.activity.value.flightNumber) {
+                            const flightNumber = context.activity.value.flightNumber;
+                            const flightService = new FlightService();
+                            // Get flight details by flight number
+                            selectedFlight = await flightService.getFlightByNumber(flightNumber);
+                        }
+                        
+                        // Pass the selected flight to the booking dialog
+                        await this.bookingDialog.run(context, this.dialogState, { selectedFlight });
                         break;
                     case 'Cancel':
                         await context.sendActivity('Cancelling your request.');

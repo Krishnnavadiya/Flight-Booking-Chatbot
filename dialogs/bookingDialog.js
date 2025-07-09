@@ -9,8 +9,11 @@ const CHOICE_PROMPT = 'choicePrompt';
 const CONFIRM_PROMPT = 'confirmPrompt';
 
 class BookingDialog extends CancelAndHelpDialog {
-    constructor() {
+    constructor(userState) {
         super('bookingDialog');
+        
+        this.userState = userState;
+        this.userProfile = this.userState.createProperty('UserProfile');
 
         this.addDialog(new TextPrompt(TEXT_PROMPT))
             .addDialog(new NumberPrompt(NUMBER_PROMPT))
@@ -28,8 +31,6 @@ class BookingDialog extends CancelAndHelpDialog {
         this.initialDialogId = WATERFALL_DIALOG;
     }
 
-    // In the selectFlightStep method, add this at the beginning:
-    
     async selectFlightStep(stepContext) {
         // Check if a flight was already selected (from comparison dialog)
         if (stepContext.options && stepContext.options.selectedFlight) {
@@ -65,19 +66,40 @@ class BookingDialog extends CancelAndHelpDialog {
     }
 
     async passengerNameStep(stepContext) {
-        stepContext.values.passengerName = stepContext.result;
+        const userProfile = await this.userProfile.get(stepContext.context, {});
+        
+        if (userProfile && userProfile.name) {
+            // If we have the user's name, suggest it as default
+            return await stepContext.prompt(TEXT_PROMPT, { prompt: `Is ${userProfile.name} the passenger name? (yes/no)` });
+        } else {
+            // If we don't have the user's name, ask for it
+            return await stepContext.prompt(TEXT_PROMPT, { prompt: 'Please enter passenger name:' });
+        }
+    }
+    
+    async passengerEmailStep(stepContext) {
+        if (stepContext.result.toLowerCase() === 'yes' || stepContext.result.toLowerCase() === 'y') {
+            // If the user confirmed their name from userProfile
+            const userProfile = await this.userProfile.get(stepContext.context, {});
+            stepContext.values.passengerName = userProfile.name;
+        } else {
+            // If they said no or provided a different name
+            stepContext.values.passengerName = stepContext.result;
+        }
+        
         return await stepContext.prompt(TEXT_PROMPT, { prompt: 'Please enter passenger email for confirmation:' });
     }
 
-    async passengerEmailStep(stepContext) {
+    async paymentMethodStep(stepContext) {
         stepContext.values.passengerEmail = stepContext.result;
+        
         return await stepContext.prompt(CHOICE_PROMPT, {
             prompt: 'Please select a payment method:',
             choices: ['Credit Card', 'PayPal', 'Apple Pay']
         });
     }
 
-    async paymentMethodStep(stepContext) {
+    async confirmStep(stepContext) {
         stepContext.values.paymentMethod = stepContext.result.value;
         
         // Summarize booking details for confirmation
@@ -94,52 +116,63 @@ class BookingDialog extends CancelAndHelpDialog {
         return await stepContext.prompt(CONFIRM_PROMPT, { prompt: 'Would you like to confirm this booking?' });
     }
 
-    async confirmStep(stepContext) {
+    async finalStep(stepContext) {
         if (stepContext.result) {
             // Process the booking
             const flightService = new FlightService();
-            const bookingResult = await flightService.bookFlight({
-                flightId: stepContext.values.selectedFlight.id,
-                passengerName: stepContext.values.passengerName,
-                passengerEmail: stepContext.values.passengerEmail,
-                paymentMethod: stepContext.values.paymentMethod
-            });
-
-            stepContext.values.bookingReference = bookingResult.bookingReference;
-            await stepContext.context.sendActivity(`Your booking is confirmed! Booking reference: ${bookingResult.bookingReference}`);
-            
-            // Send itinerary
-            const itinerary = `Here's your itinerary:\n\n` +
-                `Booking Reference: ${bookingResult.bookingReference}\n` +
-                `Passenger: ${stepContext.values.passengerName}\n` +
-                `Flight: ${stepContext.values.selectedFlight.airline} ${stepContext.values.selectedFlight.flightNumber}\n` +
-                `From: ${stepContext.values.selectedFlight.origin}\n` +
-                `To: ${stepContext.values.selectedFlight.destination}\n` +
-                `Date: ${bookingResult.departureDate}\n` +
-                `Departure: ${stepContext.values.selectedFlight.departureTime}\n` +
-                `Arrival: ${stepContext.values.selectedFlight.arrivalTime}\n\n` +
-                `A confirmation email has been sent to ${stepContext.values.passengerEmail}.`;
-
-            await stepContext.context.sendActivity(itinerary);
+            try {
+                const bookingResult = await flightService.bookFlight(
+                    stepContext.values.selectedFlight.id,
+                    {
+                        name: stepContext.values.passengerName,
+                        email: stepContext.values.passengerEmail
+                    }
+                );
+        
+                stepContext.values.bookingReference = 'BK' + Math.floor(Math.random() * 10000);
+                await stepContext.context.sendActivity(`Your booking is confirmed! Booking reference: ${stepContext.values.bookingReference}`);
+                
+                // Send itinerary
+                const itinerary = `Here's your itinerary:\n\n` +
+                    `Booking Reference: ${stepContext.values.bookingReference}\n` +
+                    `Passenger: ${stepContext.values.passengerName}\n` +
+                    `Flight: ${stepContext.values.selectedFlight.airline} ${stepContext.values.selectedFlight.flightNumber}\n` +
+                    `From: ${stepContext.values.selectedFlight.origin}\n` +
+                    `To: ${stepContext.values.selectedFlight.destination}\n` +
+                    `Departure: ${stepContext.values.selectedFlight.departureTime}\n` +
+                    `Arrival: ${stepContext.values.selectedFlight.arrivalTime}\n\n` +
+                    `A confirmation email has been sent to ${stepContext.values.passengerEmail}.`;
+        
+                await stepContext.context.sendActivity(itinerary);
+                await stepContext.context.sendActivity('Thank you for booking with our flight service! We hope you have a pleasant journey.');
+                
+                // Mark conversation as ended
+                const conversationState = stepContext.context.turnState.get('ConversationState');
+                if (conversationState) {
+                    const conversationEnded = conversationState.createProperty('ConversationEnded');
+                    await conversationEnded.set(stepContext.context, true);
+                }
+                
+                return await stepContext.cancelAllDialogs();
+            } catch (error) {
+                console.error('Error booking flight:', error);
+                await stepContext.context.sendActivity(`There was an error processing your booking. Please try again later.`);
+                return await stepContext.endDialog();
+            }
         } else {
             await stepContext.context.sendActivity('Booking cancelled. Is there anything else I can help you with?');
+            return await stepContext.endDialog();
         }
-
-        return await stepContext.next();
     }
 
-    async finalStep(stepContext) {
-        return await stepContext.endDialog();
-    }
-
-    async run(turnContext, accessor, recognizerResult) {
+    async run(turnContext, accessor, options) {
         const dialogSet = new DialogSet(accessor);
         dialogSet.add(this);
 
         const dialogContext = await dialogSet.createContext(turnContext);
         const results = await dialogContext.continueDialog();
         if (results.status === DialogTurnStatus.empty) {
-            await dialogContext.beginDialog(this.id);
+            await dialogContext.beginDialog(this.id, options);
         }
     }
 }

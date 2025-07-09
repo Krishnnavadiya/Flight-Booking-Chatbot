@@ -1,6 +1,7 @@
 const { ComponentDialog, DialogSet, DialogTurnStatus, TextPrompt, WaterfallDialog } = require('botbuilder-dialogs');
 const { FlightDetails } = require('../models/flightDetails');
 const { LuisRecognizer } = require('botbuilder-ai');
+const { FlightService } = require('../services/flightService');
 
 const FLIGHT_BOOKING_DIALOG = 'flightBookingDialog';
 const WATERFALL_DIALOG = 'waterfallDialog';
@@ -11,6 +12,7 @@ class FlightBookingDialog extends ComponentDialog {
         super(FLIGHT_BOOKING_DIALOG);
 
         this.luisRecognizer = luisRecognizer;
+        this.flightService = new FlightService(); // Initialize the flight service
 
         // Add prompts
         this.addDialog(new TextPrompt(TEXT_PROMPT));
@@ -99,7 +101,7 @@ class FlightBookingDialog extends ComponentDialog {
         }
 
         if (!flightDetails.departureDate) {
-            return await stepContext.prompt(TEXT_PROMPT, 'When would you like to depart?');
+            return await stepContext.prompt(TEXT_PROMPT, 'When would you like to depart?(e.g.: "2025-07-15")');
         } else {
             return await stepContext.next(flightDetails.departureDate);
         }
@@ -175,41 +177,41 @@ class FlightBookingDialog extends ComponentDialog {
             // Search for flights based on the details
             await stepContext.context.sendActivity('Great! Searching for flights...');
             
-            // Here you would typically call a flight search API
-            // For demo purposes, we'll simulate a response
-            setTimeout(async () => {
-                const flightOptions = [
-                    {
-                        airline: 'AirIndia',
-                        flightNumber: 'AI101',
-                        departureTime: '10:00 AM',
-                        arrivalTime: '12:30 PM',
-                        price: '$450',
-                        duration: '2h 30m'
-                    },
-                    {
-                        airline: 'IndiGo',
-                        flightNumber: 'IG202',
-                        departureTime: '2:15 PM',
-                        arrivalTime: '4:45 PM',
-                        price: '$380',
-                        duration: '2h 30m'
-                    },
-                    {
-                        airline: 'SpiceJet',
-                        flightNumber: 'SJ303',
-                        departureTime: '7:30 PM',
-                        arrivalTime: '10:00 PM',
-                        price: '$420',
-                        duration: '2h 30m'
-                    }
-                ];
+            try {
+                // Call the flight service to get real flight data
+                const flightOptions = await this.flightService.searchFlights(
+                    flightDetails.origin,
+                    flightDetails.destination,
+                    flightDetails.departureDate,
+                    flightDetails.returnDate,
+                    flightDetails.travelers,
+                    flightDetails.class
+                );
+                
+                // If you want to simulate a delay, use a proper promise-based delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
                 // Create flight cards
                 await this.sendFlightOptions(stepContext.context, flightOptions);
-            }, 2000);
-            
-            return await stepContext.endDialog(flightDetails);
+                
+                // Only end the dialog after sending flight options
+                return await stepContext.endDialog(flightDetails);
+            } catch (error) {
+                // Handle API errors gracefully
+                await stepContext.context.sendActivity(`Sorry, I encountered an issue while searching for flights: ${error.message}`);
+                
+                // Fallback to mock data if API fails
+                await stepContext.context.sendActivity('Showing some alternative options instead:');
+                const mockFlightOptions = this.flightService.getMockFlightData(
+                    flightDetails.origin,
+                    flightDetails.destination,
+                    flightDetails.departureDate,
+                    flightDetails.class
+                );
+                
+                await this.sendFlightOptions(stepContext.context, mockFlightOptions);
+                return await stepContext.endDialog(flightDetails);
+            }
         } else {
             await stepContext.context.sendActivity('No problem. Let\'s start over.');
             return await stepContext.endDialog();
@@ -220,6 +222,9 @@ class FlightBookingDialog extends ComponentDialog {
         await context.sendActivity('Here are some flight options I found for you:');
         
         for (const flight of flights) {
+            // Build Skyscanner URL for this flight
+            const skyscannerUrl = this.buildSkyscannerUrl(flight);
+            
             const card = {
                 contentType: "application/vnd.microsoft.card.adaptive",
                 content: {
@@ -300,12 +305,43 @@ class FlightBookingDialog extends ComponentDialog {
                                 "intent": "BookTicket",
                                 "flightNumber": flight.flightNumber 
                             }
+                        },
+                        {
+                            "type": "Action.OpenUrl",
+                            "title": "Book on Skyscanner",
+                            "url": skyscannerUrl
                         }
                     ]
                 }
             };
             
             await context.sendActivity({ attachments: [card] });
+        }
+    }
+
+    // Helper method to build Skyscanner URL with flight details
+    buildSkyscannerUrl(flight) {
+        try {
+            // Format the date as YYMMDD which is used by Skyscanner
+            const formatDate = (dateStr) => {
+                const date = new Date(dateStr);
+                const year = date.getFullYear().toString().substr(-2); // Get last 2 digits of year
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const day = date.getDate().toString().padStart(2, '0');
+                return year + month + day;
+            };
+
+            // Get origin and destination codes
+            const origin = flight.origin;
+            const destination = flight.destination;
+            const departureDate = formatDate(flight.departureDate);
+
+            // Construct Skyscanner URL
+            // Format: https://www.skyscanner.com/transport/flights/ORIG/DEST/YYMMDD/
+            return `https://www.skyscanner.com/transport/flights/${origin}/${destination}/${departureDate}/`;
+        } catch (error) {
+            // If URL construction fails, return the base Skyscanner URL
+            return 'https://www.skyscanner.com';
         }
     }
 }
