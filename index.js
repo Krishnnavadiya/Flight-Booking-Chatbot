@@ -36,13 +36,58 @@ adapter.onTurnError = async (context, error) => {
     const errorMsg = error.message || '';
     if (errorMsg.includes('Could not find airport code')) {
         await context.sendActivity('The bot encountered an error with the city name you provided. Please try again with a different city name.');
+        
+        // Present options to try again
+        await sendOptionsCard(context);
     } else if (errorMsg.includes('No flights found')) {
         await context.sendActivity('No flights were found for your search criteria. Please try different dates or destinations.');
+        
+        // Present options to try again
+        await sendOptionsCard(context);
     } else {
         // Generic error message
         await context.sendActivity('The bot encountered an error. Please try again later.');
     }
 };
+
+// Helper function to send options card
+// In the sendOptionsCard function
+async function sendOptionsCard(context) {
+    const card = {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.0",
+            "body": [
+                {
+                    "type": "TextBlock",
+                    "text": "What would you like to do next?",
+                    "wrap": true
+                }
+            ],
+            "actions": [
+                {
+                    "type": "Action.Submit",
+                    "title": "Search Flights",
+                    "data": { "intent": "SearchFlights", "resetDialog": true }
+                },
+                {
+                    "type": "Action.Submit",
+                    "title": "Book a Flight",
+                    "data": { "intent": "BookFlight" }
+                },
+                {
+                    "type": "Action.Submit",
+                    "title": "Compare Prices",
+                    "data": { "intent": "CompareFlights" }
+                }
+            ]
+        }
+    };
+    
+    await context.sendActivity({ attachments: [card] });
+}
 
 // Create storage, state and LUIS recognizer
 const memoryStorage = new MemoryStorage();
