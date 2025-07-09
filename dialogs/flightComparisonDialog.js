@@ -1,4 +1,4 @@
-const { WaterfallDialog, TextPrompt, DialogTurnStatus } = require('botbuilder-dialogs');
+const { WaterfallDialog, TextPrompt, DialogTurnStatus, DialogSet } = require('botbuilder-dialogs');
 const { CancelAndHelpDialog } = require('./cancelAndHelpDialog');
 const { FlightService } = require('../services/flightService');
 const { BookingDialog } = require('./bookingDialog');
@@ -8,15 +8,16 @@ const TEXT_PROMPT = 'textPrompt';
 const BOOKING_DIALOG = 'bookingDialog';
 
 class FlightComparisonDialog extends CancelAndHelpDialog {
-    constructor() {
+    constructor(userState) {
         super('flightComparisonDialog');
 
         this.addDialog(new TextPrompt(TEXT_PROMPT))
-            .addDialog(new BookingDialog())
+            .addDialog(new BookingDialog(userState))
             .addDialog(new WaterfallDialog(WATERFALL_DIALOG, [
                 this.originStep.bind(this),
                 this.destinationStep.bind(this),
-                this.dateStep.bind(this),
+                this.departureDateStep.bind(this),
+                this.returnDateStep.bind(this),
                 this.compareStep.bind(this),
                 this.retryStep.bind(this),
                 this.selectionStep.bind(this)
@@ -34,13 +35,18 @@ class FlightComparisonDialog extends CancelAndHelpDialog {
         return await stepContext.prompt(TEXT_PROMPT, { prompt: 'Where would you like to fly to?' });
     }
 
-    async dateStep(stepContext) {
+    async departureDateStep(stepContext) {
         stepContext.values.destination = stepContext.result;
-        return await stepContext.prompt(TEXT_PROMPT, { prompt: 'When would you like to travel?' });
+        return await stepContext.prompt(TEXT_PROMPT, { prompt: 'When would you like to depart? (e.g.: "2025-07-15")' });
+    }
+
+    async returnDateStep(stepContext) {
+        stepContext.values.departureDate = stepContext.result;
+        return await stepContext.prompt(TEXT_PROMPT, { prompt: 'When would you like to return? (Leave empty for one-way flight)' });
     }
 
     async compareStep(stepContext) {
-        stepContext.values.date = stepContext.result;
+        stepContext.values.returnDate = stepContext.result;
         
         // Call flight service to compare flights
         const flightService = new FlightService();
@@ -48,7 +54,8 @@ class FlightComparisonDialog extends CancelAndHelpDialog {
             const flights = await flightService.searchFlights(
                 stepContext.values.origin,
                 stepContext.values.destination,
-                stepContext.values.date
+                stepContext.values.departureDate,
+                stepContext.values.returnDate || null  // Pass null for one-way flights
             );
     
             if (flights && flights.length > 0) {
@@ -68,16 +75,17 @@ class FlightComparisonDialog extends CancelAndHelpDialog {
                 // Format comparison results
                 let comparisonResults = 'Here are the available flights:\n\n';
                 
+                // In the compareStep method, update how flights are displayed
                 comparisonResults += 'Best Price Options:\n';
                 for (let i = 0; i < Math.min(3, sortedByPrice.length); i++) {
                     const flight = sortedByPrice[i];
-                    comparisonResults += `${i + 1}. ${flight.airline} - $${flight.price} - ${flight.departureTime} → ${flight.arrivalTime} (${flight.duration})\n`;
+                    comparisonResults += `${i + 1}. ${flight.airline} ${flight.flightNumber} - $${flight.price} - ${flight.departureTime} → ${flight.arrivalTime} (${flight.duration})\n`;
                 }
-                
+
                 comparisonResults += '\nFastest Options:\n';
                 for (let i = 0; i < Math.min(3, sortedByDuration.length); i++) {
                     const flight = sortedByDuration[i];
-                    comparisonResults += `${i + 1}. ${flight.airline} - ${flight.duration} - ${flight.departureTime} → ${flight.arrivalTime} ($${flight.price})\n`;
+                    comparisonResults += `${i + 1}. ${flight.airline} ${flight.flightNumber} - ${flight.duration} - ${flight.departureTime} → ${flight.arrivalTime} ($${flight.price})\n`;
                 }
     
                 await stepContext.context.sendActivity(comparisonResults);
@@ -140,7 +148,18 @@ class FlightComparisonDialog extends CancelAndHelpDialog {
         }
         
         // Find the selected flight
-        const selectedFlight = stepContext.values.flights.find(f => f.flightNumber === selectedFlightNumber);
+        let selectedFlight;
+        
+        // First try to find by flight number
+        selectedFlight = stepContext.values.flights.find(f => f.flightNumber === selectedFlightNumber);
+        
+        // If not found, try to interpret as a numeric index (1-based)
+        if (!selectedFlight && /^\d+$/.test(selectedFlightNumber)) {
+            const index = parseInt(selectedFlightNumber, 10) - 1; // Convert to 0-based index
+            if (index >= 0 && index < stepContext.values.flights.length) {
+                selectedFlight = stepContext.values.flights[index];
+            }
+        }
         
         if (selectedFlight) {
             await stepContext.context.sendActivity(`You've selected ${selectedFlight.airline} flight ${selectedFlight.flightNumber} for $${selectedFlight.price}.`);
