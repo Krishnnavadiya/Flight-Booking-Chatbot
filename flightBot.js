@@ -6,6 +6,7 @@ const { CancelAndHelpDialog } = require('./dialogs/cancelAndHelpDialog');
 const { FlightSearchDialog } = require('./dialogs/flightSearchDialog');
 const { FlightComparisonDialog } = require('./dialogs/flightComparisonDialog');
 const { BookingDialog } = require('./dialogs/bookingDialog');
+const { UserProfile } = require('./models/userProfile');
 
 class FlightBot extends ActivityHandler {
     constructor(conversationState, userState, luisRecognizer) {
@@ -19,15 +20,46 @@ class FlightBot extends ActivityHandler {
         this.userState = userState;
         this.luisRecognizer = luisRecognizer;
         this.dialogState = this.conversationState.createProperty('DialogState');
+        this.conversationEnded = this.conversationState.createProperty('ConversationEnded');
+        this.userProfile = this.userState.createProperty('UserProfile');
         
         // Create the dialogs
         this.flightBookingDialog = new FlightBookingDialog(this.luisRecognizer);
         this.flightSearchDialog = new FlightSearchDialog();
-        this.flightComparisonDialog = new FlightComparisonDialog();
-        this.bookingDialog = new BookingDialog();
+        this.flightComparisonDialog = new FlightComparisonDialog(this.userState);
+        this.bookingDialog = new BookingDialog(this.userState);
 
+        // Set up the onMessage handler
         this.onMessage(async (context, next) => {
             console.log('Processing Message Activity.');
+        
+            // Check if conversation has been marked as ended
+            const conversationEnded = await this.conversationEnded.get(context, false);
+            if (conversationEnded) {
+                // If conversation was marked as ended, reset it and start fresh
+                await this.conversationEnded.set(context, false);
+                await this.sendWelcomeMessage(context);
+                await next();
+                return;
+            }
+
+            // Check if we're waiting for the user's name
+            const waitingForName = await this.conversationState.createProperty('WaitingForName').get(context, false);
+            if (waitingForName) {
+                // Get the user's name from the message
+                const userProfile = await this.userProfile.get(context, new UserProfile());
+                userProfile.name = context.activity.text;
+                await this.userProfile.set(context, userProfile);
+                
+                // Reset the waiting flag
+                await this.conversationState.createProperty('WaitingForName').set(context, false);
+                
+                // Send a personalized welcome message
+                await context.sendActivity(`Nice to meet you, ${userProfile.name}! How can I help you today?`);
+                await this.sendWelcomeMessage(context, userProfile.name);
+                await next();
+                return;
+            }
 
             // First, check if there's an active dialog
             // Create a DialogSet with the accessor
@@ -65,9 +97,16 @@ class FlightBot extends ActivityHandler {
                     case 'BookFlight':
                         await this.flightBookingDialog.run(context, this.dialogState);
                         break;
+                    // In the onMessage handler, when handling the SearchFlights intent
                     case 'SearchFlights':
-                        await this.flightSearchDialog.run(context, this.dialogState);
-                        break;
+                    // Check if we need to reset the dialog (coming from error handling)
+                    if (context.activity.value && context.activity.value.resetDialog) {
+                        // Cancel any existing dialogs first
+                        const dialogContext = await dialogSet.createContext(context);
+                        await dialogContext.cancelAllDialogs();
+                    }
+                    await this.flightSearchDialog.run(context, this.dialogState);
+                    break;
                     case 'CompareFlights':
                         await this.flightComparisonDialog.run(context, this.dialogState);
                         break;
@@ -87,15 +126,25 @@ class FlightBot extends ActivityHandler {
             await next();
         });
 
+        // Set up the onMembersAdded handler
         this.onMembersAdded(async (context, next) => {
             const membersAdded = context.activity.membersAdded;
             
             for (const member of membersAdded) {
                 if (member.id !== context.activity.recipient.id) {
-                    await this.sendWelcomeMessage(context);
+                    // Check if we already have the user's name
+                    const userProfile = await this.userProfile.get(context, {});
+                    
+                    if (!userProfile.name) {
+                        await context.sendActivity('Welcome to Flight Booking Bot! Before we start, may I know your name?');
+                        // Set a flag to indicate we're waiting for the name
+                        await this.conversationState.createProperty('WaitingForName').set(context, true);
+                    } else {
+                        await this.sendWelcomeMessage(context, userProfile.name);
+                    }
                 }
             }
-
+        
             await next();
         });
     }
@@ -103,10 +152,14 @@ class FlightBot extends ActivityHandler {
     /**
      * Send a welcome message along with suggested actions for the user.
      * @param {TurnContext} turnContext A TurnContext instance containing all the data needed for processing this conversation turn.
+     * @param {string} userName Optional user name to personalize the greeting
      */
-    async sendWelcomeMessage(turnContext) {
+    async sendWelcomeMessage(turnContext, userName = '') {
         const { activity } = turnContext;
-
+        
+        // Create a personalized greeting if we have the user's name
+        const greeting = userName ? `Welcome to Flight Booking Bot, ${userName}!` : 'Welcome to Flight Booking Bot!';
+    
         // Create a hero card with suggested actions
         const card = {
             contentType: "application/vnd.microsoft.card.adaptive",
@@ -117,7 +170,7 @@ class FlightBot extends ActivityHandler {
                 "body": [
                     {
                         "type": "TextBlock",
-                        "text": "Welcome to Flight Booking Bot!",
+                        "text": greeting,
                         "weight": "bolder",
                         "size": "large"
                     },
@@ -151,7 +204,7 @@ class FlightBot extends ActivityHandler {
                 ]
             }
         };
-
+    
         await turnContext.sendActivity({ attachments: [card] });
     }
 

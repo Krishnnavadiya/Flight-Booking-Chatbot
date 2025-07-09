@@ -1,3 +1,6 @@
+
+
+
 const { WaterfallDialog, TextPrompt, DialogSet, DialogTurnStatus } = require('botbuilder-dialogs');
 const { CancelAndHelpDialog } = require('./cancelAndHelpDialog');
 const { FlightService } = require('../services/flightService');
@@ -21,6 +24,11 @@ class FlightSearchDialog extends CancelAndHelpDialog {
     }
 
     async originStep(stepContext) {
+        // Clear any existing values to ensure a fresh start
+        stepContext.values.origin = undefined;
+        stepContext.values.destination = undefined;
+        stepContext.values.date = undefined;
+        
         return await stepContext.prompt(TEXT_PROMPT, { prompt: 'Where would you like to fly from?' });
     }
 
@@ -31,7 +39,7 @@ class FlightSearchDialog extends CancelAndHelpDialog {
 
     async dateStep(stepContext) {
         stepContext.values.destination = stepContext.result;
-        return await stepContext.prompt(TEXT_PROMPT, { prompt: 'When would you like to travel?' });
+        return await stepContext.prompt(TEXT_PROMPT, { prompt: 'When would you like to travel?(e.g.: "2025-07-15")' });
     }
 
     async searchStep(stepContext) {
@@ -42,7 +50,7 @@ class FlightSearchDialog extends CancelAndHelpDialog {
         const flights = await flightService.searchFlights(
             stepContext.values.origin,
             stepContext.values.destination,
-            stepContext.values.date
+            stepContext.values.date  // Fixed: removed the hyphen
         );
 
         if (flights && flights.length > 0) {
@@ -56,11 +64,60 @@ class FlightSearchDialog extends CancelAndHelpDialog {
             });
 
             await stepContext.context.sendActivity(flightResults);
+            
+            // Store the flights in dialog state for potential booking
+            stepContext.values.flights = flights;
+            
+            // Present options after showing flight results
+            const card = this.createOptionsCard(flights);
+            await stepContext.context.sendActivity({ attachments: [card] });
         } else {
             await stepContext.context.sendActivity('I couldn\'t find any flights matching your criteria. Please try different search parameters.');
+            
+            // Present the same options as when flights are found
+            const card = this.createOptionsCard();
+            await stepContext.context.sendActivity({ attachments: [card] });
         }
 
         return await stepContext.endDialog();
+    }
+
+    // Helper method to create a consistent options card
+    createOptionsCard(flights = null) {
+        const card = {
+            contentType: "application/vnd.microsoft.card.adaptive",
+            content: {
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.0",
+                "body": [
+                    {
+                        "type": "TextBlock",
+                        "text": "What would you like to do next?",
+                        "wrap": true
+                    }
+                ],
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "Search Another Flight",
+                        "data": { "intent": "SearchFlights", "resetDialog": true }
+                    },
+                    {
+                        "type": "Action.Submit",
+                        "title": "Book a Flight",
+                        "data": { "intent": "BookTicket", "flights": flights }
+                    },
+                    {
+                        "type": "Action.Submit",
+                        "title": "Compare Prices",
+                        "data": { "intent": "CompareFlights" }
+                    }
+                ]
+            }
+        };
+        
+        return card;
     }
 
     async run(turnContext, accessor, recognizerResult) {
@@ -68,10 +125,12 @@ class FlightSearchDialog extends CancelAndHelpDialog {
         dialogSet.add(this);
 
         const dialogContext = await dialogSet.createContext(turnContext);
-        const results = await dialogContext.continueDialog();
-        if (results.status === DialogTurnStatus.empty) {
-            await dialogContext.beginDialog(this.id);
-        }
+        
+        // Cancel any active dialog first to ensure a fresh start
+        await dialogContext.cancelAllDialogs();
+        
+        // Then begin a new dialog
+        await dialogContext.beginDialog(this.id);
     }
 }
 
